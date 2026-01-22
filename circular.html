@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Lab: Tension & Tangents</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        canvas { background: #0f172a; border-radius: 1rem; cursor: crosshair; }
+        .math-font { font-family: 'Times New Roman', Times, serif; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 font-sans text-slate-800">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div>
+                <h1 class="text-2xl font-black text-blue-900 uppercase leading-none">The Tension Lab</h1>
+                <p class="text-slate-500 font-medium mt-1">Hit the target to prove Newton's First Law.</p>
+            </div>
+            <div class="flex gap-4 mt-4 md:mt-0">
+                <div class="px-4 py-2 bg-blue-50 rounded-lg border border-blue-100 text-center">
+                    <span class="text-[10px] font-bold text-blue-800 block">LINEAR SPEED</span>
+                    <span class="text-lg math-font italic font-bold text-blue-600">v = rω</span>
+                </div>
+                <div class="px-4 py-2 bg-red-50 rounded-lg border border-red-100 text-center">
+                    <span class="text-[10px] font-bold text-red-800 block">TENSION (F<sub>c</sub>)</span>
+                    <span class="text-lg math-font italic font-bold text-red-600">F = ma<sub>c</sub></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-4 space-y-4">
+                <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
+                    <div class="flex gap-2 mb-6">
+                        <button onclick="setVersion(1)" id="btnV1" class="flex-1 py-2 rounded-lg font-bold transition bg-blue-600 text-white">Mode 1: ω</button>
+                        <button onclick="setVersion(2)" id="btnV2" class="flex-1 py-2 rounded-lg font-bold transition bg-slate-100 text-slate-600">Mode 2: v</button>
+                    </div>
+
+                    <div class="space-y-5">
+                        <div id="ui-w">
+                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-wider text-blue-600">ANGULAR SPEED (ω)</label>
+                            <input type="range" id="inputW" min="0.5" max="10" step="0.01" value="3.14" class="w-full accent-blue-600">
+                            <div class="flex justify-between font-mono text-sm"><span>0.5</span><span class="font-bold" id="valW">3.14 rad/s</span><span>10.0</span></div>
+                        </div>
+
+                        <div id="ui-v" class="hidden">
+                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-wider text-emerald-600">LINEAR SPEED (v)</label>
+                            <input type="range" id="inputV" min="0.5" max="5" step="0.1" value="1" class="w-full accent-emerald-600">
+                            <div class="flex justify-between font-mono text-sm"><span>1.0</span><span class="font-bold" id="valV">5.0 m/s</span><span>15.0</span></div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-wider">RADIUS (r)</label>
+                            <input type="range" id="inputR" min="0.5" max="1.5" step="0.01" value="1.0" class="w-full accent-slate-600">
+                            <div class="flex justify-between font-mono text-sm"><span>0.5m</span><span id="valR">1.00m</span><span>1.5m</span></div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1 tracking-wider">MASS (m)</label>
+                            <input type="range" id="inputM" min="0.1" max="5.0" step="0.1" value="1.0" class="w-full accent-orange-500">
+                            <div class="flex justify-between font-mono text-sm"><span>0.1kg</span><span id="valM" class="text-orange-600 font-bold">1.0kg</span><span>5.0kg</span></div>
+                        </div>
+
+                        <div class="pt-4 space-y-3">
+                            <button onclick="cutForce()" class="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-black shadow-lg transition-all active:scale-95 text-lg">
+                                CUT TENSION LINE
+                            </button>
+                            <button onclick="resetGame()" class="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm">Next Target / Reset</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="message" class="hidden p-4 rounded-xl text-center font-bold border-2"></div>
+            </div>
+
+            <div class="lg:col-span-8 space-y-4">
+                <div class="relative">
+                    <canvas id="canvas" width="700" height="420" class="w-full shadow-2xl border-4 border-white"></canvas>
+                    <div class="absolute bottom-4 left-4 text-white/50 text-[10px] font-mono pointer-events-none">
+                        Dashed Line: Path | Solid Red: Tension Vector (F<sub>c</sub>)
+                    </div>
+                </div>
+                
+                <div id="math-output" class="bg-white p-6 rounded-2xl shadow grid grid-cols-1 md:grid-cols-2 gap-8 font-mono text-xs md:text-sm">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let mode = 1, isCut = false, angle = 0, pos = {x:0, y:0}, vel = {x:0, y:0};
+        let target = {x: 0, y: 0, active: true};
+        const PX_M = 110; 
+
+        function spawnTarget() {
+            target.x = 50 + Math.random() * (canvas.width - 100);
+            target.y = 50 + Math.random() * (canvas.height - 100);
+            const dist = Math.hypot(target.x - canvas.width/2, target.y - canvas.height/2);
+            if (dist < 180) spawnTarget(); 
+        }
+
+        function setVersion(m) {
+            mode = m;
+            document.getElementById('btnV1').className = m === 1 ? 'flex-1 py-2 rounded-lg font-bold bg-blue-600 text-white' : 'flex-1 py-2 rounded-lg font-bold bg-slate-100 text-slate-600';
+            document.getElementById('btnV2').className = m === 2 ? 'flex-1 py-2 rounded-lg font-bold bg-emerald-600 text-white' : 'flex-1 py-2 rounded-lg font-bold bg-slate-100 text-slate-600';
+            document.getElementById('ui-w').classList.toggle('hidden', m === 2);
+            document.getElementById('ui-v').classList.toggle('hidden', m === 1);
+            resetGame();
+        }
+
+        function cutForce() { if(!isCut) isCut = true; }
+        function resetGame() { isCut = false; angle = 0; target.active = true; document.getElementById('message').className = "hidden"; spawnTarget(); }
+
+        function loop() {
+            const r = parseFloat(document.getElementById('inputR').value);
+            const m = parseFloat(document.getElementById('inputM').value);
+            const cx = canvas.width / 2; const cy = canvas.height / 2;
+            let w, v;
+
+            if (mode === 1) {
+                w = parseFloat(document.getElementById('inputW').value);
+                v = w * r;
+                document.getElementById('valW').innerText = w.toFixed(2) + " rad/s";
+            } else {
+                v = parseFloat(document.getElementById('inputV').value);
+                w = v / r;
+                document.getElementById('valV').innerText = v.toFixed(2) + " m/s";
+            }
+            document.getElementById('valR').innerText = r.toFixed(2) + "m";
+            document.getElementById('valM').innerText = m.toFixed(1) + "kg";
+
+            if (!isCut) {
+                angle += w * (1/60);
+                pos.x = cx + Math.cos(angle) * (r * PX_M);
+                pos.y = cy + Math.sin(angle) * (r * PX_M);
+                vel.x = -Math.sin(angle) * v * PX_M;
+                vel.y = Math.cos(angle) * v * PX_M;
+            } else {
+                pos.x += vel.x * (1/60);
+                pos.y += vel.y * (1/60);
+                const distToTarget = Math.hypot(pos.x - target.x, pos.y - target.y);
+                if (distToTarget < 20 && target.active) { target.active = false; showResult(true); }
+                else if ((pos.x < 0 || pos.x > canvas.width || pos.y < 0 || pos.y > canvas.height) && target.active) { showResult(false); }
+            }
+
+            draw(cx, cy, r * PX_M, m);
+            updateMath(w, v, r, m);
+            requestAnimationFrame(loop);
+        }
+
+        function draw(cx, cy, pr, m) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Target
+            ctx.beginPath(); ctx.arc(target.x, target.y, 15, 0, Math.PI*2);
+            ctx.fillStyle = target.active ? '#fbbf24' : '#10b981'; ctx.fill();
+            ctx.strokeStyle = 'white'; ctx.stroke();
+
+            // Orbit
+            ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI*2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.setLineDash([5, 5]); ctx.stroke();
+            ctx.setLineDash([]);
+
+            if (!isCut) {
+                // Tension Line (Red)
+                ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(pos.x, pos.y);
+                ctx.strokeStyle = '#ef4444'; ctx.lineWidth = Math.min(m, 5); ctx.stroke();
+            }
+
+            // Ball
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, 8 + m*2, 0, Math.PI*2);
+            ctx.fillStyle = mode === 1 ? '#3b82f6' : '#10b981'; ctx.fill();
+        }
+
+        function showResult(hit) {
+            const msg = document.getElementById('message');
+            msg.className = hit ? "block p-4 rounded-xl text-center font-bold bg-green-50 border-green-200 text-green-700" : "block p-4 rounded-xl text-center font-bold bg-red-50 border-red-200 text-red-700";
+            msg.innerText = hit ? "BULLSEYE! Newton's 1st Law in action!" : "MISSED! Velocity is ALWAYS tangential.";
+        }
+
+        function updateMath(w, v, r, m) {
+            const T = (2 * Math.PI / w).toFixed(3);
+            const rps = (w / (2 * Math.PI)).toFixed(3);
+            const ac = (v * v / r).toFixed(2);
+            const force = (m * ac).toFixed(2);
+
+            document.getElementById('math-output').innerHTML = `
+                <div class="space-y-2 border-l-4 border-blue-500 pl-4">
+                    <p class="text-blue-600 font-bold uppercase tracking-tighter">I. Kinematics</p>
+                    <p>v = r × ω = ${r.toFixed(2)} × ${w.toFixed(2)} = <span class="text-blue-600 font-bold">${v.toFixed(2)} m/s</span></p>
+                    <p>Period T = 2π/ω = ${T} s</p>
+                    <p>Rev/s = ω/2π = <span class="bg-yellow-100 px-1">${rps} rev/s</span></p>
+                </div>
+                <div class="space-y-2 border-l-4 border-red-500 pl-4">
+                    <p class="text-red-600 font-bold uppercase tracking-tighter">II. Dynamics (Force)</p>
+                    <p>a<sub>c</sub> = v²/r = ${v.toFixed(2)}² / ${r.toFixed(2)} = ${ac} m/s²</p>
+                    <p class="text-sm">Tension Force (F<sub>c</sub>):</p>
+                    <p class="text-lg">F = m × a<sub>c</sub> = ${m.toFixed(1)} × ${ac} = <span class="text-red-600 font-bold">${force} N</span></p>
+                </div>
+            `;
+        }
+
+        spawnTarget();
+        loop();
+    </script>
+</body>
+</html>
